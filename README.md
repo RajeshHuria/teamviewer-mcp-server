@@ -136,4 +136,3 @@ MIT — see [LICENSE](LICENSE)
 - **Author**: Rajesh Huria
 - **MCP framework**: [Model Context Protocol Python SDK](https://github.com/modelcontextprotocol/python-sdk)
 - **TeamViewer Web API**: [TeamViewer API documentation](https://webapi.teamviewer.com/api/v1/docs/index)
-- Built with [Claude](https://claude.ai) and [Claude Code](https://claude.ai/claude-code)
