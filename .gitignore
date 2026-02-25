@@ -1,5 +1,6 @@
 # Secrets & environment
-# .env and .mcp.json are committed with placeholder values — add real token locally after cloning
+.env
+.mcp.json
 
 # Local Claude Code settings
 .claude/
