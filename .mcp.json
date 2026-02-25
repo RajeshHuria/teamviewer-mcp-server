@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "teamviewer": {
+      "command": "mcp-teamviewer",
+      "env": {
+        "TEAMVIEWER_API_TOKEN": ""
+      }
+    }
+  }
+}
