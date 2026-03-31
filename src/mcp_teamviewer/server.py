@@ -4,6 +4,7 @@ Exposes TeamViewer Web API (https://webapi.teamviewer.com/api/v1) as MCP tools.
 Authentication: Bearer token (Script Token or OAuth 2.0 access token).
 """
 
+import base64
 import json
 import os
 from pathlib import Path
@@ -90,6 +91,19 @@ async def tv_delete(path: str) -> Any:
         if response.status_code == 204:
             return {"success": True}
         return response.json()
+
+
+async def tv_get_bytes(path: str, params: dict | None = None) -> bytes:
+    """Like tv_get but returns raw bytes (for binary responses such as screenshots)."""
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"{BASE_URL}{path}",
+            headers=build_headers(),
+            params=params,
+            timeout=30.0,
+        )
+        response.raise_for_status()
+        return response.content
 
 
 def ok(data: Any) -> list[types.TextContent]:
@@ -504,6 +518,279 @@ TOOLS = [
         description="Verify the API token is valid and the TeamViewer API is reachable.",
         inputSchema={"type": "object", "properties": {}, "required": []},
     ),
+    # ── Connection Reports (by ID) ──────────────────────────────────────────
+    types.Tool(
+        name="get_connection_report",
+        description="Get a single connection (session) report by its ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "report_id": {"type": "string", "description": "Connection report ID (UUID)"},
+            },
+            "required": ["report_id"],
+        },
+    ),
+    types.Tool(
+        name="update_connection_report",
+        description="Update notes or custom fields on a connection report by its ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "report_id": {"type": "string", "description": "Connection report ID (UUID)"},
+                "notes": {"type": "string", "description": "Notes to set on the report"},
+            },
+            "required": ["report_id"],
+        },
+    ),
+    types.Tool(
+        name="delete_connection_report",
+        description="Delete a connection report by its ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "report_id": {"type": "string", "description": "Connection report ID (UUID)"},
+            },
+            "required": ["report_id"],
+        },
+    ),
+    # ── Connection Report AI / Transcripts / Screenshots ────────────────────
+    types.Tool(
+        name="get_connection_report_ai_summary",
+        description=(
+            "Get the AI-generated session summary for an outgoing connection report. "
+            "Requires Tensor plan with AI features enabled."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "report_id": {"type": "string", "description": "Outgoing session report ID (UUID)"},
+            },
+            "required": ["report_id"],
+        },
+    ),
+    types.Tool(
+        name="get_connection_report_chat_transcript",
+        description="Get the chat transcript for an outgoing connection report.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "report_id": {"type": "string", "description": "Outgoing session report ID (UUID)"},
+            },
+            "required": ["report_id"],
+        },
+    ),
+    types.Tool(
+        name="get_connection_report_voice_transcript",
+        description="Get the voice transcript for an outgoing connection report.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "report_id": {"type": "string", "description": "Outgoing session report ID (UUID)"},
+            },
+            "required": ["report_id"],
+        },
+    ),
+    types.Tool(
+        name="get_connection_report_augmented_summary",
+        description="Get the AI-generated augmented session summary for an outgoing connection report.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "report_id": {"type": "string", "description": "Outgoing session report ID (UUID)"},
+            },
+            "required": ["report_id"],
+        },
+    ),
+    types.Tool(
+        name="list_connection_report_screenshots",
+        description="List all screenshots captured during an outgoing connection session.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "report_id": {"type": "string", "description": "Outgoing session report ID (UUID)"},
+            },
+            "required": ["report_id"],
+        },
+    ),
+    types.Tool(
+        name="get_connection_report_screenshot",
+        description=(
+            "Download a specific screenshot from an outgoing connection session. "
+            "Returns the image as a base64-encoded string."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "report_id": {"type": "string", "description": "Outgoing session report ID (UUID)"},
+                "screenshot_id": {"type": "string", "description": "Screenshot ID"},
+            },
+            "required": ["report_id", "screenshot_id"],
+        },
+    ),
+    # ── Connection Report Features ──────────────────────────────────────────
+    types.Tool(
+        name="list_connection_report_features",
+        description="List available feature names/IDs that can be used to filter connection reports.",
+        inputSchema={"type": "object", "properties": {}, "required": []},
+    ),
+    types.Tool(
+        name="get_connection_report_features",
+        description="Get feature metadata for a set of connection reports by posting their IDs.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "report_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of connection report IDs to fetch features for",
+                },
+            },
+            "required": ["report_ids"],
+        },
+    ),
+    types.Tool(
+        name="get_connection_report_feature_connections",
+        description="Get connection reports filtered by a specific feature name and feature ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "feature_name": {"type": "string", "description": "Feature name (e.g. 'fileTransfer')"},
+                "feature_id": {"type": "string", "description": "Feature ID"},
+            },
+            "required": ["feature_name", "feature_id"],
+        },
+    ),
+    types.Tool(
+        name="get_connection_report_feature_connection",
+        description="Get a single connection report filtered by a specific feature name and feature ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "feature_name": {"type": "string", "description": "Feature name"},
+                "feature_id": {"type": "string", "description": "Feature ID"},
+            },
+            "required": ["feature_name", "feature_id"],
+        },
+    ),
+    # ── Device Reports ──────────────────────────────────────────────────────
+    types.Tool(
+        name="get_device_reports",
+        description="Get incoming session (device) reports. Returns reports for sessions where this account was the remote device.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "from_date": {"type": "string", "description": "Start date (ISO 8601)"},
+                "to_date": {"type": "string", "description": "End date (ISO 8601)"},
+                "device_id": {"type": "string", "description": "Filter by device ID"},
+                "limit": {"type": "integer", "description": "Max records to return", "default": 100},
+                "offset": {"type": "integer", "description": "Pagination offset", "default": 0},
+            },
+            "required": [],
+        },
+    ),
+    types.Tool(
+        name="get_device_report_ai_summary",
+        description=(
+            "Get the AI-generated session summary for an incoming device session report. "
+            "Requires Tensor plan with AI features enabled."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "report_id": {"type": "string", "description": "Incoming session report ID (UUID)"},
+            },
+            "required": ["report_id"],
+        },
+    ),
+    types.Tool(
+        name="get_device_report_chat_transcript",
+        description="Get the chat transcript for an incoming device session report.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "report_id": {"type": "string", "description": "Incoming session report ID (UUID)"},
+            },
+            "required": ["report_id"],
+        },
+    ),
+    types.Tool(
+        name="list_device_report_features",
+        description="List available feature names/IDs that can be used to filter device reports.",
+        inputSchema={"type": "object", "properties": {}, "required": []},
+    ),
+    types.Tool(
+        name="get_device_report_features",
+        description="Get feature metadata for a set of device reports by posting their IDs.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "report_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of device report IDs to fetch features for",
+                },
+            },
+            "required": ["report_ids"],
+        },
+    ),
+    types.Tool(
+        name="get_device_report_feature_connections",
+        description="Get device reports filtered by a specific feature name and feature ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "feature_name": {"type": "string", "description": "Feature name"},
+                "feature_id": {"type": "string", "description": "Feature ID"},
+            },
+            "required": ["feature_name", "feature_id"],
+        },
+    ),
+    types.Tool(
+        name="get_device_report_feature_connection",
+        description="Get a single device report filtered by a specific feature name and feature ID.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "feature_name": {"type": "string", "description": "Feature name"},
+                "feature_id": {"type": "string", "description": "Feature ID"},
+            },
+            "required": ["feature_name", "feature_id"],
+        },
+    ),
+    # ── Session extras ───────────────────────────────────────────────────────
+    types.Tool(
+        name="delete_session",
+        description="Permanently delete a support session by session code.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "session_code": {"type": "string", "description": "Session code (e.g. s00-000-000)"},
+            },
+            "required": ["session_code"],
+        },
+    ),
+    types.Tool(
+        name="get_session_custom_module_config",
+        description="Get the custom module config ID associated with a session code.",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "session_code": {"type": "string", "description": "Session code"},
+            },
+            "required": ["session_code"],
+        },
+    ),
+    types.Tool(
+        name="get_session_custom_modules_config_id",
+        description="Get the custom modules config ID for a session (alternate endpoint).",
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "session_code": {"type": "string", "description": "Session code"},
+            },
+            "required": ["session_code"],
+        },
+    ),
 ]
 
 
@@ -702,6 +989,128 @@ async def handle_call_tool(
 
         elif name == "get_policy":
             data = await tv_get(f"/teamviewerpolicies/{args['policy_id']}")
+            return ok(data)
+
+        # ── Connection Reports (by ID) ────────────────────────────────────────
+        elif name == "get_connection_report":
+            data = await tv_get(f"/reports/connections/{args['report_id']}")
+            return ok(data)
+
+        elif name == "update_connection_report":
+            report_id = args.pop("report_id")
+            payload = {k: v for k, v in args.items() if v is not None}
+            data = await tv_put(f"/reports/connections/{report_id}", payload)
+            return ok(data)
+
+        elif name == "delete_connection_report":
+            data = await tv_delete(f"/reports/connections/{args['report_id']}")
+            return ok(data)
+
+        # ── Connection Report AI / Transcripts ───────────────────────────────
+        elif name == "get_connection_report_ai_summary":
+            data = await tv_get(f"/reports/connections/{args['report_id']}/ai-summary")
+            return ok(data)
+
+        elif name == "get_connection_report_chat_transcript":
+            data = await tv_get(f"/reports/connections/{args['report_id']}/chat-transcript")
+            return ok(data)
+
+        elif name == "get_connection_report_voice_transcript":
+            data = await tv_get(f"/reports/connections/{args['report_id']}/voice-transcript")
+            return ok(data)
+
+        elif name == "get_connection_report_augmented_summary":
+            data = await tv_get(f"/reports/connections/{args['report_id']}/augmented-session-summary")
+            return ok(data)
+
+        # ── Connection Report Screenshots ─────────────────────────────────────
+        elif name == "list_connection_report_screenshots":
+            data = await tv_get(f"/reports/connections/{args['report_id']}/screenshots")
+            return ok(data)
+
+        elif name == "get_connection_report_screenshot":
+            raw = await tv_get_bytes(
+                f"/reports/connections/{args['report_id']}/{args['screenshot_id']}/screenshot"
+            )
+            encoded = base64.b64encode(raw).decode("ascii")
+            return ok({"screenshot_base64": encoded})
+
+        # ── Connection Report Features ────────────────────────────────────────
+        elif name == "list_connection_report_features":
+            data = await tv_get("/reports/connections/features")
+            return ok(data)
+
+        elif name == "get_connection_report_features":
+            data = await tv_post("/reports/connections/getFeatures", {"reportIds": args["report_ids"]})
+            return ok(data)
+
+        elif name == "get_connection_report_feature_connections":
+            data = await tv_get(
+                f"/reports/connections/features/{args['feature_name']}/{args['feature_id']}/connections"
+            )
+            return ok(data)
+
+        elif name == "get_connection_report_feature_connection":
+            data = await tv_get(
+                f"/reports/connections/features/{args['feature_name']}/{args['feature_id']}/connection"
+            )
+            return ok(data)
+
+        # ── Device Reports ────────────────────────────────────────────────────
+        elif name == "get_device_reports":
+            params: dict[str, Any] = {}
+            field_map = {
+                "from_date": "from",
+                "to_date": "to",
+                "device_id": "deviceid",
+                "limit": "limit",
+                "offset": "offset",
+            }
+            for arg_key, param_key in field_map.items():
+                if args.get(arg_key) is not None:
+                    params[param_key] = args[arg_key]
+            data = await tv_get("/reports/devices", params or None)
+            return ok(data)
+
+        elif name == "get_device_report_ai_summary":
+            data = await tv_get(f"/reports/devices/{args['report_id']}/ai-summary")
+            return ok(data)
+
+        elif name == "get_device_report_chat_transcript":
+            data = await tv_get(f"/reports/devices/{args['report_id']}/chat-transcript")
+            return ok(data)
+
+        elif name == "list_device_report_features":
+            data = await tv_get("/reports/devices/features")
+            return ok(data)
+
+        elif name == "get_device_report_features":
+            data = await tv_post("/reports/devices/getFeatures", {"reportIds": args["report_ids"]})
+            return ok(data)
+
+        elif name == "get_device_report_feature_connections":
+            data = await tv_get(
+                f"/reports/devices/features/{args['feature_name']}/{args['feature_id']}/connections"
+            )
+            return ok(data)
+
+        elif name == "get_device_report_feature_connection":
+            data = await tv_get(
+                f"/reports/devices/features/{args['feature_name']}/{args['feature_id']}/connection"
+            )
+            return ok(data)
+
+        # ── Session extras ────────────────────────────────────────────────────
+        elif name == "delete_session":
+            data = await tv_delete(f"/sessions/{args['session_code']}")
+            return ok(data)
+
+        elif name == "get_session_custom_module_config":
+            data = await tv_get(f"/sessions/{args['session_code']}/customModuleConfigIdForSessionCode")
+            return ok(data)
+
+        elif name == "get_session_custom_modules_config_id":
+            data = await tv_get(f"/sessions/{args['session_code']}/custom_modules_config_id")
             return ok(data)
 
         else:
