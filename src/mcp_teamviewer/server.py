@@ -1148,25 +1148,59 @@ async def handle_call_tool(
 # Entry point
 # ---------------------------------------------------------------------------
 
-async def run():
+def _init_options() -> InitializationOptions:
+    return InitializationOptions(
+        server_name="mcp-teamviewer",
+        server_version="0.1.0",
+        capabilities=server.get_capabilities(
+            notification_options=NotificationOptions(),
+            experimental_capabilities={},
+        ),
+    )
+
+
+async def run_stdio():
     async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
-        await server.run(
-            read_stream,
-            write_stream,
-            InitializationOptions(
-                server_name="mcp-teamviewer",
-                server_version="0.1.0",
-                capabilities=server.get_capabilities(
-                    notification_options=NotificationOptions(),
-                    experimental_capabilities={},
-                ),
-            ),
-        )
+        await server.run(read_stream, write_stream, _init_options())
+
+
+def run_sse():
+    """Start an SSE HTTP server suitable for cloud deployment (e.g. Azure)."""
+    from starlette.applications import Starlette
+    from starlette.responses import Response
+    from starlette.routing import Mount, Route
+    from mcp.server.sse import SseServerTransport
+    import uvicorn
+
+    sse_transport = SseServerTransport("/messages/")
+
+    async def handle_sse(request):
+        async with sse_transport.connect_sse(
+            request.scope, request.receive, request._send
+        ) as streams:
+            await server.run(streams[0], streams[1], _init_options())
+        return Response()
+
+    app = Starlette(
+        routes=[
+            Route("/sse", endpoint=handle_sse, methods=["GET"]),
+            Mount("/messages/", app=sse_transport.handle_post_message),
+        ]
+    )
+
+    host = os.environ.get("HOST", "0.0.0.0")
+    port = int(os.environ.get("PORT", "8000"))
+    uvicorn.run(app, host=host, port=port)
 
 
 def main():
     import asyncio
-    asyncio.run(run())
+
+    transport = os.environ.get("MCP_TRANSPORT", "stdio").lower()
+    if transport == "sse":
+        run_sse()
+    else:
+        asyncio.run(run_stdio())
 
 
 if __name__ == "__main__":
