@@ -5,10 +5,15 @@ Authentication: Bearer token (Script Token or OAuth 2.0 access token).
 """
 
 import base64
+import contextvars
 import json
 import os
 from pathlib import Path
 from typing import Any
+
+# Holds the TeamViewer token for the current SSE connection.
+# Falls back to the TEAMVIEWER_API_TOKEN env var for local stdio use.
+_token_var: contextvars.ContextVar[str] = contextvars.ContextVar("teamviewer_token", default="")
 
 from dotenv import load_dotenv
 
@@ -27,12 +32,11 @@ server = Server("mcp-teamviewer")
 
 
 def get_token() -> str:
-    token = os.environ.get("TEAMVIEWER_API_TOKEN", "")
+    token = _token_var.get() or os.environ.get("TEAMVIEWER_API_TOKEN", "")
     if not token:
         raise ValueError(
-            "TEAMVIEWER_API_TOKEN environment variable is not set. "
-            "Create a Script Token in TeamViewer Management Console under "
-            "Edit Profile → Apps → Create Script Token."
+            "No TeamViewer API token provided. "
+            "Pass your Script Token as a query parameter: /sse?token=<your-token>"
         )
     return token
 
@@ -1164,17 +1168,81 @@ async def run_stdio():
         await server.run(read_stream, write_stream, _init_options())
 
 
+_LANDING_PAGE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TeamViewer MCP Server</title>
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+           max-width: 640px; margin: 80px auto; padding: 0 24px; color: #1a1a1a; }}
+    h1 {{ font-size: 1.6rem; margin-bottom: 8px; }}
+    p {{ color: #555; line-height: 1.6; }}
+    input {{ width: 100%; padding: 10px 12px; font-size: 1rem; border: 1px solid #ccc;
+             border-radius: 6px; box-sizing: border-box; margin: 12px 0; }}
+    button {{ padding: 10px 20px; background: #0078d4; color: white; border: none;
+              border-radius: 6px; font-size: 1rem; cursor: pointer; }}
+    button:hover {{ background: #005fa3; }}
+    .result {{ display: none; margin-top: 24px; }}
+    .result label {{ font-weight: 600; display: block; margin-bottom: 6px; }}
+    .url-box {{ background: #f4f4f4; border: 1px solid #ddd; border-radius: 6px;
+                padding: 12px; font-family: monospace; word-break: break-all; font-size: 0.9rem; }}
+    .copy-btn {{ margin-top: 8px; background: #444; font-size: 0.85rem; padding: 6px 14px; }}
+  </style>
+</head>
+<body>
+  <h1>TeamViewer MCP Server</h1>
+  <p>Enter your TeamViewer Script Token to get a personal MCP server URL for Claude.</p>
+  <input id="token" type="password" placeholder="Paste your TeamViewer Script Token here" />
+  <button onclick="generate()">Generate my MCP URL</button>
+  <div class="result" id="result">
+    <label>Your personal MCP Server URL:</label>
+    <div class="url-box" id="url"></div>
+    <button class="copy-btn" onclick="copy()">Copy</button>
+    <p style="margin-top:16px; font-size:0.9rem;">
+      Add this URL to <strong>Claude Desktop</strong>
+      (<code>claude_desktop_config.json</code>) or run:<br><br>
+      <code>claude mcp add teamviewer --url &lt;your-url&gt;</code>
+    </p>
+  </div>
+  <script>
+    function generate() {{
+      const token = document.getElementById('token').value.trim();
+      if (!token) {{ alert('Please enter your token.'); return; }}
+      const url = window.location.origin + '/sse?token=' + encodeURIComponent(token);
+      document.getElementById('url').textContent = url;
+      document.getElementById('result').style.display = 'block';
+    }}
+    function copy() {{
+      navigator.clipboard.writeText(document.getElementById('url').textContent);
+    }}
+  </script>
+</body>
+</html>"""
+
+
 def run_sse():
     """Start an SSE HTTP server suitable for cloud deployment (e.g. Azure)."""
     from starlette.applications import Starlette
-    from starlette.responses import Response
+    from starlette.responses import HTMLResponse, JSONResponse, Response
     from starlette.routing import Mount, Route
     from mcp.server.sse import SseServerTransport
     import uvicorn
 
     sse_transport = SseServerTransport("/messages/")
 
+    async def handle_landing(request):
+        return HTMLResponse(_LANDING_PAGE)
+
     async def handle_sse(request):
+        token = request.query_params.get("token", "").strip()
+        if not token:
+            return JSONResponse(
+                {"error": "Missing token. Use /sse?token=<your-teamviewer-token>"},
+                status_code=401,
+            )
+        _token_var.set(token)
         async with sse_transport.connect_sse(
             request.scope, request.receive, request._send
         ) as streams:
@@ -1183,6 +1251,7 @@ def run_sse():
 
     app = Starlette(
         routes=[
+            Route("/", endpoint=handle_landing, methods=["GET"]),
             Route("/sse", endpoint=handle_sse, methods=["GET"]),
             Mount("/messages/", app=sse_transport.handle_post_message),
         ]
