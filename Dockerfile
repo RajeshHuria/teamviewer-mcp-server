@@ -18,6 +18,7 @@ RUN pip install --no-cache-dir -e .
 ENV PORT=8000
 ENV HOST=0.0.0.0
 ENV MCP_TRANSPORT=sse
+# No TEAMVIEWER_API_TOKEN here — each user supplies their own token via /sse?token=
 
 EXPOSE 8000
 
