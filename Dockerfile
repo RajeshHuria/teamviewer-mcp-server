@@ -4,6 +4,7 @@ WORKDIR /app
 
 # Install dependencies first (better layer caching)
 COPY pyproject.toml .
+COPY LICENSE .
 RUN pip install --no-cache-dir .
 
 # Copy source
