@@ -1,5 +1,15 @@
 # TeamViewer MCP Server
 
+> **⚠️ ALPHA — USE AT YOUR OWN RISK**
+>
+> This project is in **alpha stage** and is provided as-is, without any warranty or support of any kind.
+> It is not affiliated with, endorsed by, or supported by TeamViewer GmbH.
+>
+> - Breaking changes may occur at any time without notice
+> - There is no guaranteed uptime, stability, or data safety
+> - The author accepts **no responsibility or liability** for any damage, data loss, account issues, or any other consequences arising from the use of this software
+> - **Use entirely at your own risk**
+
 An MCP (Model Context Protocol) server that exposes the [TeamViewer Web API v1](https://webapi.teamviewer.com/api/v1/docs/index) as tools callable by Claude and other MCP clients.
 
 ## Prerequisites
