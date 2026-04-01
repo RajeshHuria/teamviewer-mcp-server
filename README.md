@@ -3,7 +3,6 @@
 > **⚠️ ALPHA — USE AT YOUR OWN RISK**
 >
 > This project is in **alpha stage** and is provided as-is, without any warranty or support of any kind.
-> It is not affiliated with, endorsed by, or supported by TeamViewer GmbH.
 >
 > - Breaking changes may occur at any time without notice
 > - There is no guaranteed uptime, stability, or data safety
