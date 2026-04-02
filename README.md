@@ -11,6 +11,12 @@
 
 An MCP (Model Context Protocol) server that exposes the [TeamViewer Web API v1](https://webapi.teamviewer.com/api/v1/docs/index) as tools callable by Claude and other MCP clients.
 
+A hosted instance is available for anyone to use — no setup required. Just bring your own TeamViewer Script Token:
+
+**🌐 https://teamviewer-mcp.victoriousgrass-fb6499b5.westeurope.azurecontainerapps.io/**
+
+Visit the URL above, paste your token, and get a personal MCP server URL ready to plug into Claude or any other MCP-compatible client.
+
 ## Prerequisites
 
 - Python 3.10+
