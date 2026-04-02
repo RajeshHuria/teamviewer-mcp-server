@@ -30,27 +30,113 @@ Visit the URL above, paste your token, and get a personal MCP server URL ready t
 3. Go to **Apps** → **Create Script Token**
 4. Select the required permissions and save the token
 
-## Installation
+## Connecting to the Hosted Server
 
-```bash
-cd MCP_TV
-pip install -e .
+The quickest way to get started — no installation needed. Use the hosted instance with your own TeamViewer Script Token.
+
+### Step 1 — Get your personal MCP URL
+
+Visit **https://teamviewer-mcp.victoriousgrass-fb6499b5.westeurope.azurecontainerapps.io/**, paste your Script Token, and copy the generated URL. It will look like:
+
+```
+https://teamviewer-mcp.victoriousgrass-fb6499b5.westeurope.azurecontainerapps.io/sse?token=YOUR_TOKEN
 ```
 
-## Configuration
+### Step 2 — Connect your client
 
-Set the token as an environment variable:
-
-```bash
-export TEAMVIEWER_API_TOKEN="your_token_here"
-```
-
-## Usage with Claude Desktop
+#### Claude Desktop
 
 Add the following to your Claude Desktop config file:
 
 **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
 **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "teamviewer": {
+      "type": "sse",
+      "url": "https://teamviewer-mcp.victoriousgrass-fb6499b5.westeurope.azurecontainerapps.io/sse?token=YOUR_TOKEN"
+    }
+  }
+}
+```
+
+Restart Claude Desktop — the TeamViewer tools will appear automatically.
+
+#### Claude Code
+
+```bash
+claude mcp add --transport sse teamviewer \
+  "https://teamviewer-mcp.victoriousgrass-fb6499b5.westeurope.azurecontainerapps.io/sse?token=YOUR_TOKEN"
+```
+
+#### OpenClaw
+
+```bash
+openclaw mcp set teamviewer '{
+  "url": "https://teamviewer-mcp.victoriousgrass-fb6499b5.westeurope.azurecontainerapps.io/sse?token=YOUR_TOKEN"
+}'
+```
+
+#### OpenAI Agents SDK
+
+```python
+import asyncio
+from agents import Agent, Runner
+from agents.mcp import MCPServerSse
+
+TV_MCP_URL = "https://teamviewer-mcp.victoriousgrass-fb6499b5.westeurope.azurecontainerapps.io/sse?token=YOUR_TOKEN"
+
+async def main():
+    async with MCPServerSse(name="teamviewer", params={"url": TV_MCP_URL}, cache_tools_list=True) as tv:
+        agent = Agent(
+            name="TeamViewer Assistant",
+            model="gpt-4o",
+            instructions="You help manage TeamViewer devices and sessions.",
+            mcp_servers=[tv],
+        )
+        result = await Runner.run(agent, "List all my online TeamViewer devices")
+        print(result.final_output)
+
+asyncio.run(main())
+```
+
+Install the SDK first: `pip install openai-agents`
+
+#### OpenAI Responses API
+
+```python
+from openai import OpenAI
+
+client = OpenAI()  # uses OPENAI_API_KEY env var
+
+response = client.responses.create(
+    model="gpt-4o",
+    tools=[{
+        "type": "mcp",
+        "server_label": "teamviewer",
+        "server_url": "https://teamviewer-mcp.victoriousgrass-fb6499b5.westeurope.azurecontainerapps.io/sse?token=YOUR_TOKEN",
+        "require_approval": "never",
+    }],
+    input="List all my online TeamViewer devices"
+)
+print(response.output_text)
+```
+
+---
+
+## Self-Hosting (Local Setup)
+
+If you prefer to run the server yourself:
+
+```bash
+pip install -e .
+export TEAMVIEWER_API_TOKEN="your_token_here"
+mcp-teamviewer
+```
+
+### Usage with Claude Desktop (local)
 
 ```json
 {
@@ -65,7 +151,7 @@ Add the following to your Claude Desktop config file:
 }
 ```
 
-If `mcp-teamviewer` is not on your PATH (e.g. installed in a local venv), use the full path to the binary:
+If `mcp-teamviewer` is not on your PATH (e.g. installed in a local venv), use the full path:
 
 ```json
 {
